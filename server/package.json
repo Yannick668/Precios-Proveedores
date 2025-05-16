@@ -4,7 +4,8 @@
     "description": "API para precios de proveedores",
     "main": "index.js",
     "scripts": {
-      "start": "node index.js"
+      "start": "node index.js",
+       "setup-db": "node ./db/setup.js"
     },
     "type": "module",
     "dependencies": {
