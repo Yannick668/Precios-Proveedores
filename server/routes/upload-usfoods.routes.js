@@ -33,18 +33,17 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       await pool.query(
         `INSERT INTO precios_proveedores_usfoods 
-        (fecha, group_name, clave, nombre, product_brand, product_package_size, product_price, product_uom, usf_class_description, storage_description, quantity, unit_price)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        (fecha, group_name, clave, nombre, product_brand, package_size, product_price, uom, storage_description, quantity, unit_price)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           fecha,
           row['Group Name'],
           row['clave'],
           row['nombre'],
           row['Product Brand'],
-          row['Product Package Size'],
+          row['Product Package Size'],           // Ahora va a package_size en BD
           parseFloat(row['Product Price']) || null,
           row['Product UOM'],
-          row['USF Class Description'],
           row['Storage Description'],
           parseInt(row['Qty']) || null,
           parseFloat(row['Unit Price']) || null
