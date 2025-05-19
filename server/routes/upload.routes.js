@@ -11,20 +11,20 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
   try {
     const filePath = req.file.path;
 
-    // Leer el archivo Excel y convertir la hoja a JSON
     const workbook = xlsx.readFile(filePath);
     const sheetName = 'Catalogo productos proveedor';
 
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
-      defval: '', // evita que falten campos
-      raw: false  // fuerza los valores como strings si es necesario
+      defval: '',
+      raw: false
     });
 
     let filasInsertadas = 0;
     let filasOmitidas = 0;
+    const filasRechazadas = [];
 
     for (const row of data) {
-      // Validar campos obligatorios con más precisión
+      // Validación segura
       if (
         !row.clave ||
         isNaN(parseInt(row.cantidad)) ||
@@ -32,7 +32,7 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
         isNaN(parseInt(row.PACK)) ||
         !row.unidad?.toString().trim()
       ) {
-        console.warn('⏭️ Fila omitida por datos incompletos:', row);
+        filasRechazadas.push(row);
         filasOmitidas++;
         continue;
       }
@@ -54,12 +54,13 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
       filasInsertadas++;
     }
 
-    fs.unlinkSync(filePath); // Elimina el archivo después de usarlo
+    fs.unlinkSync(filePath); // Elimina el archivo temporal
 
     res.status(200).json({
       message: '✅ Archivo Excel procesado con éxito',
       filas_insertadas: filasInsertadas,
-      filas_omitidas: filasOmitidas
+      filas_omitidas: filasOmitidas,
+      filas_rechazadas: filasRechazadas // ← aquí está el reporte detallado
     });
   } catch (error) {
     console.error('❌ Error al procesar Excel:', error);

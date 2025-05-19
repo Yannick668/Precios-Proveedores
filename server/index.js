@@ -16,6 +16,9 @@ app.use(express.json());
 app.use('/api/productos', productosRoutes);
 import uploadRoutes from './routes/upload.routes.js';
 app.use('/api', uploadRoutes);
+import uploadSyscoRoutes from './routes/upload-sysco.routes.js';
+app.use('/api', uploadSyscoRoutes);
+
 
 
 // Inicio
