@@ -11,16 +11,20 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
   try {
     const filePath = req.file.path;
 
-    // Leer el archivo Excel
+    // Leer el archivo Excel y convertir la hoja a JSON
     const workbook = xlsx.readFile(filePath);
     const sheetName = 'Catalogo productos proveedor';
-    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      defval: '', // evita que falten campos
+      raw: false  // fuerza los valores como strings si es necesario
+    });
 
     let filasInsertadas = 0;
     let filasOmitidas = 0;
 
     for (const row of data) {
-      // Validar campos obligatorios
+      // Validar campos obligatorios con más precisión
       if (
         !row.clave ||
         isNaN(parseInt(row.cantidad)) ||
@@ -32,7 +36,7 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
         filasOmitidas++;
         continue;
       }
-      
+
       await pool.query(
         `INSERT INTO catalogo_pp (proveedor, clave, nombre_estandar, unidad, qty, size, pack)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
