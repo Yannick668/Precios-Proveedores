@@ -33,7 +33,7 @@ router.post('/upload-restaurantdepot', upload.single('file'), async (req, res) =
 
       await pool.query(
         `INSERT INTO precios_proveedores_restaurantdepot
-        (fecha, upc, clave, nombre, category, unit_case, qty, estimated_price, qty2, unit_price, package_size, um)
+        (fecha, upc, clave, nombre, category, unit_per_case, quantity, price, quantity2, unit_price, package_size, uom)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           fecha,
@@ -54,7 +54,7 @@ router.post('/upload-restaurantdepot', upload.single('file'), async (req, res) =
       filasInsertadas++;
     }
 
-    fs.unlinkSync(filePath); // Eliminar temporal
+    fs.unlinkSync(filePath); // Eliminar archivo temporal
 
     res.status(200).json({
       message: '✅ Archivo Restaurant Depot procesado con éxito',
