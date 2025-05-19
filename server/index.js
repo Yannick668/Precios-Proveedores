@@ -14,6 +14,9 @@ app.use(express.json());
 
 // Rutas
 app.use('/api/productos', productosRoutes);
+import uploadRoutes from './routes/upload.routes.js';
+app.use('/api', uploadRoutes);
+
 
 // Inicio
 app.listen(PORT, () => {
