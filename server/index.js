@@ -18,6 +18,9 @@ import uploadRoutes from './routes/upload.routes.js';
 app.use('/api', uploadRoutes);
 import uploadSyscoRoutes from './routes/upload-sysco.routes.js';
 app.use('/api', uploadSyscoRoutes);
+import uploadUSFoodsRoutes from './routes/upload-usfoods.routes.js';
+app.use('/api', uploadUSFoodsRoutes);
+
 
 
 
