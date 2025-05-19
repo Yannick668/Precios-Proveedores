@@ -23,16 +23,16 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
       // Validar campos obligatorios
       if (
         !row.clave ||
-        !row.cantidad ||
-        !row.size ||
-        !row.PACK ||
-        !row.unidad
+        isNaN(parseInt(row.cantidad)) ||
+        !row.size?.toString().trim() ||
+        isNaN(parseInt(row.PACK)) ||
+        !row.unidad?.toString().trim()
       ) {
         console.warn('⏭️ Fila omitida por datos incompletos:', row);
         filasOmitidas++;
         continue;
       }
-
+      
       await pool.query(
         `INSERT INTO catalogo_pp (proveedor, clave, nombre_estandar, unidad, qty, size, pack)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
