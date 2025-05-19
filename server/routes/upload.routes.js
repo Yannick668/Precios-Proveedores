@@ -16,24 +16,47 @@ router.post('/upload-catalogo', upload.single('file'), async (req, res) => {
     const sheetName = 'Catalogo productos proveedor';
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
+    let filasInsertadas = 0;
+    let filasOmitidas = 0;
+
     for (const row of data) {
+      // Validar campos obligatorios
+      if (
+        !row.clave ||
+        !row.cantidad ||
+        !row.size ||
+        !row.PACK ||
+        !row.unidad
+      ) {
+        console.warn('⏭️ Fila omitida por datos incompletos:', row);
+        filasOmitidas++;
+        continue;
+      }
+
       await pool.query(
         `INSERT INTO catalogo_pp (proveedor, clave, nombre_estandar, unidad, qty, size, pack)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          row.proveedor,               // $1
-          row.clave,                   // $2
-          row.nombre_producto,         // $3
-          row.unidad,                  // $4
-          parseInt(row.cantidad),      // $5
-          row.size,                    // $6
-          parseInt(row.PACK)           // $7
+          row.proveedor,
+          row.clave,
+          row.nombre_producto,
+          row.unidad,
+          parseInt(row.cantidad),
+          row.size,
+          parseInt(row.PACK)
         ]
       );
+
+      filasInsertadas++;
     }
 
     fs.unlinkSync(filePath); // Elimina el archivo después de usarlo
-    res.status(200).json({ message: '✅ Archivo Excel procesado con éxito' });
+
+    res.status(200).json({
+      message: '✅ Archivo Excel procesado con éxito',
+      filas_insertadas: filasInsertadas,
+      filas_omitidas: filasOmitidas
+    });
   } catch (error) {
     console.error('❌ Error al procesar Excel:', error);
     res.status(500).json({ error: 'Error al procesar archivo Excel' });
