@@ -7,6 +7,15 @@ import { pool } from '../db/connection.js';
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' }); // Carpeta temporal
 
+// Convierte fechas de Excel en formato número a YYYY-MM-DD
+function excelDateToJSDate(serial) {
+  if (!serial || isNaN(serial)) return null;
+  const utc_days = Math.floor(serial - 25569);
+  const utc_value = utc_days * 86400;
+  const date_info = new Date(utc_value * 1000);
+  return date_info.toISOString().split('T')[0];
+}
+
 router.post('/upload-sysco', upload.single('file'), async (req, res) => {
   try {
     const filePath = req.file.path;
@@ -21,12 +30,14 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
     let filasInsertadas = 0;
 
     for (const row of data) {
+      const fechaConvertida = excelDateToJSDate(row['fecha']);
+
       await pool.query(
         `INSERT INTO precios_proveedores_sysco 
         (fecha, clave, pack, size, unit, brand, nombre, category, case_price, split, net_weight, stock, quantity, unit_price)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
-          row['fecha'],
+          fechaConvertida,
           row['clave'],
           row['Pack'],
           row['Size'],
