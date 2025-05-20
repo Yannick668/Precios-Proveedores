@@ -7,14 +7,16 @@ import { pool } from '../db/connection.js';
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' }); // Carpeta temporal
 
-// Extrae fecha del nombre: USFoods_04_05_2025.xlsx → 2025-04-05
+// Extrae fecha del nombre: busca los últimos 3 fragmentos como MM_DD_YYYY → YYYY-MM-DD
 function extractFechaSQL(filename) {
   const name = filename.replace('.xlsx', '');
   const parts = name.split('_');
-  if (parts.length === 4) {
-    const [_, mes, dia, anio] = parts;
+
+  if (parts.length >= 3) {
+    const [mes, dia, anio] = parts.slice(-3);
     return `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   }
+
   return null;
 }
 
@@ -44,7 +46,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
     // Leer Excel (primera hoja con encabezados en la fila 2)
     const workbook = xlsx.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 }); // Saltar fila de encabezado visual
+    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 });
 
     let filasInsertadas = 0;
 
