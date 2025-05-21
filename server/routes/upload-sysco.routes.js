@@ -5,42 +5,28 @@ import fs from 'fs';
 import { pool } from '../db/connection.js';
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' }); // Carpeta temporal
+const upload = multer({ dest: 'uploads/' });
 
-// Función para extraer la fecha del nombre del archivo en formato MM/DD/YYYY
-function extractFechaFromFilename(filename) {
-  const name = filename.replace('.xlsx', '');
-  const parts = name.split('_');
+function extractFecha(filename) {
+  const parts = filename.replace('.xlsx', '').split('_');
   if (parts.length >= 4) {
-    const month = parts[1];
-    const day = parts[2];
-    const year = parts[3];
-return `${year}-${month}-${day}`;
+    const [_, mes, dia, anio] = parts;
+    return `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   }
   return null;
 }
 
-router.post('/upload-sysco', upload.single('file'), async (req, res) => {
+router.post('/procesar-sysco', upload.single('file'), async (req, res) => {
   const filePath = req.file.path;
   const filename = req.file.originalname;
+  const fecha = extractFecha(filename);
+  const proveedor = 'Sysco';
 
-  const fecha = extractFechaFromFilename(filename);
   if (!fecha) {
     return res.status(400).json({ error: '❌ No se pudo extraer la fecha del nombre del archivo' });
   }
 
   try {
-    // Verificar si ya existe información para esa fecha
-    const result = await pool.query('SELECT 1 FROM precios_proveedores_sysco WHERE fecha = $1 LIMIT 1', [fecha]);
-    if (result.rowCount > 0) {
-      fs.unlinkSync(filePath);
-      return res.status(200).json({
-        message: `⚠️ Ya existen registros para la fecha ${fecha}. El archivo fue ignorado.`,
-        fecha: fecha
-      });
-    }
-
-    // Leer Excel
     const workbook = xlsx.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = xlsx.utils.sheet_to_json(sheet, { defval: '' });
@@ -48,41 +34,64 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
     let filasInsertadas = 0;
 
     for (const row of data) {
+      const clave = row['SUPC'];
+      let nombre_estandar = null;
+      let unidad = null;
+      let qty = null;
+      let size = null;
+      let pack = null;
+      let precioUnitario = null;
+
+      // Intentar obtener del catálogo
+      const catalogo = await pool.query(
+        `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
+        [proveedor, clave]
+      );
+
+      if (catalogo.rowCount > 0) {
+        const producto = catalogo.rows[0];
+        nombre_estandar = producto.nombre_estandar;
+        unidad = producto.unidad;
+        qty = producto.qty;
+        size = producto.size;
+        pack = producto.pack;
+
+        const precioCaja = parseFloat(row['Case $']) || null;
+        const totalUnidades = (qty || 1) * (pack || 1);
+        precioUnitario = precioCaja && totalUnidades > 0 ? precioCaja / totalUnidades : null;
+      }
+
       await pool.query(
-        `INSERT INTO precios_proveedores_sysco 
-        (fecha, clave, pack, size, unit, brand, nombre, category, case_price, split, net_weight, stock, quantity, unit_price)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        `INSERT INTO bd_precios_historicos 
+        (fecha, proveedor, clave, nombre_estandar, unidad, qty, size, pack, precio_unitario)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           fecha,
-          row['SUPC'],
-          row['Pack'],
-          row['Size'],
-          row['Unit'],
-          row['Brand'],
-          row['Desc'],
-          row['Cat'],
-          parseFloat(row['Case $']) || null,
-          parseFloat(row['Split $']) || null,
-          parseFloat(row['Net Wt']) || null,
-          row['Stock'],
-          parseInt(row['Qty']) || null,
-          parseFloat(row['Unit Price']) || null
+          proveedor,
+          clave,
+          nombre_estandar,
+          unidad,
+          qty,
+          size,
+          pack,
+          precioUnitario
         ]
       );
+
       filasInsertadas++;
     }
 
     fs.unlinkSync(filePath);
 
     res.status(200).json({
-      message: '✅ Archivo procesado exitosamente',
-      fecha: fecha,
+      message: '✅ Archivo Sysco procesado correctamente',
+      fecha,
       filas_insertadas: filasInsertadas
     });
 
   } catch (error) {
     console.error('❌ Error al procesar archivo Sysco:', error);
-    res.status(500).json({ error: 'Error interno al procesar el archivo' });
+    res.status(500).json({ error: 'Error interno al procesar y normalizar archivo Sysco' });
   }
 });
 
