@@ -16,7 +16,7 @@ function extractFecha(filename) {
   return null;
 }
 
-router.post('/procesar-sysco', upload.single('file'), async (req, res) => {
+router.post('/upload-sysco', upload.single('file'), async (req, res) => {
   const filePath = req.file.path;
   const filename = req.file.originalname;
   const fecha = extractFecha(filename);
