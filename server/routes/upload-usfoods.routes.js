@@ -7,11 +7,13 @@ import { pool } from '../db/connection.js';
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
 
+// ✅ Extraer fecha desde el nombre, sin importar el prefijo
 function extractFecha(filename) {
-  const parts = filename.replace('.xlsx', '').split('_');
-  if (parts.length >= 4) {
-    const [_, mes, dia, anio] = parts;
-    return `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+  const regex = /(\d{2})_(\d{2})_(\d{4})/;
+  const match = filename.match(regex);
+  if (match) {
+    const [, mes, dia, anio] = match;
+    return `${anio}-${mes}-${dia}`;
   }
   return null;
 }
@@ -35,14 +37,14 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
     for (const row of data) {
       const clave = row['Product Number'];
-      let nombre_común = null;
+      let nombre_comun = null;
       let unidad = null;
       let cantidad = null;
       let size = null;
       let pack = null;
       let precioUnitario = null;
 
-      // Buscar en el catálogo
+      // Buscar en catálogo
       const catalogo = await pool.query(
         `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
         [proveedor, clave]
@@ -50,7 +52,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       if (catalogo.rowCount > 0) {
         const producto = catalogo.rows[0];
-        nombre_común = producto.nombre_estandar;
+        nombre_comun = producto.nombre_estandar;
         unidad = producto.unidad;
         cantidad = producto.qty;
         size = producto.size;
@@ -63,7 +65,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       await pool.query(
         `INSERT INTO bd_precios_historicos
-        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_común, descripcion, categoria, marca, tamaño, unidad, size_unidad)
+        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_comun, descripcion, categoria, marca, tamaño, unidad, size_unidad)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           fecha,
@@ -72,7 +74,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
           parseFloat(row['Product Price']) || null,
           precioUnitario,
           parseInt(row['Qty']) || null,
-          nombre_común,
+          nombre_comun,
           row['Product Description'],
           row['Group Name'],
           row['Product Brand'],
