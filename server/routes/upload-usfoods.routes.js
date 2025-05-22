@@ -29,13 +29,13 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
   try {
     const workbook = xlsx.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 }); // Saltamos encabezado visual
+    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 }); // Saltar encabezado visual
 
     let filasInsertadas = 0;
 
     for (const row of data) {
       const clave = row['Product Number'];
-      let nombre_comun = null;
+      let nombre_común = null;
       let unidad = null;
       let cantidad = null;
       let size = null;
@@ -50,7 +50,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       if (catalogo.rowCount > 0) {
         const producto = catalogo.rows[0];
-        nombre_comun = producto.nombre_estandar;
+        nombre_común = producto.nombre_estandar;
         unidad = producto.unidad;
         cantidad = producto.qty;
         size = producto.size;
@@ -63,7 +63,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       await pool.query(
         `INSERT INTO bd_precios_historicos
-        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_comun, descripcion, categoria, marca, tamaño, unidad, size_unidad)
+        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_común, descripcion, categoria, marca, tamaño, unidad, size_unidad)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           fecha,
@@ -72,7 +72,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
           parseFloat(row['Product Price']) || null,
           precioUnitario,
           parseInt(row['Qty']) || null,
-          nombre_comun,
+          nombre_común,
           row['Product Description'],
           row['Group Name'],
           row['Product Brand'],
