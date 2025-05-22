@@ -35,15 +35,17 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
 
     for (const row of data) {
       const clave = row['SUPC'];
-      let nombreComun = null;
-      let unidad = null;
-      let qty = null;
-      let size = null;
-      let pack = null;
-      let precioCaja = parseFloat(row['Case $']) || null;
-      let precioUnitario = null;
+      const descripcion = row['Desc'];
+      const categoria = row['Cat'];
+      const marca = row['Brand'];
+      const precio_case = parseFloat(row['Case $']) || null;
 
-      // Buscar en catálogo
+      let nombre_com = null;
+      let unidad = null;
+      let cantidad = null;
+      let tamaño = null;
+      let precio_unit = null;
+
       const catalogo = await pool.query(
         `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
         [proveedor, clave]
@@ -51,34 +53,33 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
 
       if (catalogo.rowCount > 0) {
         const producto = catalogo.rows[0];
-        nombreComun = producto.nombre_estandar;
+        nombre_com = producto.nombre_estandar;
         unidad = producto.unidad;
-        qty = producto.qty;
-        size = producto.size;
-        pack = producto.pack;
+        cantidad = producto.qty;
+        tamaño = producto.size;
 
-        const totalUnidades = (qty || 1) * (pack || 1);
-        precioUnitario = precioCaja && totalUnidades > 0 ? precioCaja / totalUnidades : null;
+        const totalUnidades = (cantidad || 1) * (producto.pack || 1);
+        precio_unit = precio_case && totalUnidades > 0 ? precio_case / totalUnidades : null;
       }
 
       await pool.query(
         `INSERT INTO bd_precios_historicos 
-         (fecha, proveedor, clave, nombre_común, descripcion, categoria, marca, precio_case, precio_unit, cantidad, tamaño, unidad, size_unidad)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_com, descripcion, categoria, marca, tamaño, unidad, size_unidad)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           fecha,
           proveedor,
           clave,
-          nombreComun,
-          row['Desc'],
-          row['Cat'],
-          row['Brand'],
-          precioCaja,
-          precioUnitario,
-          qty,
-          size,
+          precio_case,
+          precio_unit,
+          cantidad,
+          nombre_com,
+          descripcion,
+          categoria,
+          marca,
+          tamaño,
           unidad,
-          size && unidad ? `${size} - ${unidad}` : null
+          tamaño && unidad ? `${tamaño} ${unidad}` : null
         ]
       );
 
@@ -88,7 +89,7 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
     fs.unlinkSync(filePath);
 
     res.status(200).json({
-      message: '✅ Archivo Sysco procesado correctamente',
+      message: '✅ Archivo Sysco procesado y normalizado correctamente',
       fecha,
       filas_insertadas: filasInsertadas
     });
