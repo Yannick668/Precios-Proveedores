@@ -35,14 +35,15 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
 
     for (const row of data) {
       const clave = row['SUPC'];
-      let nombre_estandar = null;
+      let nombreComun = null;
       let unidad = null;
       let qty = null;
       let size = null;
       let pack = null;
+      let precioCaja = parseFloat(row['Case $']) || null;
       let precioUnitario = null;
 
-      // Intentar obtener del catálogo
+      // Buscar en catálogo
       const catalogo = await pool.query(
         `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
         [proveedor, clave]
@@ -50,31 +51,34 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
 
       if (catalogo.rowCount > 0) {
         const producto = catalogo.rows[0];
-        nombre_estandar = producto.nombre_estandar;
+        nombreComun = producto.nombre_estandar;
         unidad = producto.unidad;
         qty = producto.qty;
         size = producto.size;
         pack = producto.pack;
 
-        const precioCaja = parseFloat(row['Case $']) || null;
         const totalUnidades = (qty || 1) * (pack || 1);
         precioUnitario = precioCaja && totalUnidades > 0 ? precioCaja / totalUnidades : null;
       }
 
       await pool.query(
         `INSERT INTO bd_precios_historicos 
-        (fecha, proveedor, clave, nombre_estandar, unidad, qty, size, pack, precio_unitario)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         (fecha, proveedor, clave, nombre_común, descripcion, categoria, marca, precio_case, precio_unit, cantidad, tamaño, unidad, size_unidad)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           fecha,
           proveedor,
           clave,
-          nombre_estandar,
-          unidad,
+          nombreComun,
+          row['Desc'],
+          row['Cat'],
+          row['Brand'],
+          precioCaja,
+          precioUnitario,
           qty,
           size,
-          pack,
-          precioUnitario
+          unidad,
+          size && unidad ? `${size} - ${unidad}` : null
         ]
       );
 
