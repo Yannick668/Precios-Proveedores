@@ -65,7 +65,7 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       await pool.query(
         `INSERT INTO bd_precios_historicos
-        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_comun, descripcion, categoria, marca, tamaño, unidad, size_unidad)
+        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_común, descripcion, categoria, marca, tamaño, unidad, size_unidad)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           fecha,
