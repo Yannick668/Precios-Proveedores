@@ -31,72 +31,82 @@ router.post('/upload-sysco', upload.single('file'), async (req, res) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = xlsx.utils.sheet_to_json(sheet, { defval: '' });
 
-    let filasInsertadas = 0;
+    let filasCrudas = 0;
+    let filasNormalizadas = 0;
 
     for (const row of data) {
+      // Insertar en precios_raw_sysco
+      await pool.query(
+        `INSERT INTO precios_raw_sysco 
+         (fecha, supc, pack, size, unit, brand, descripcion, cat, case_price, split, net_weight, stock)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          fecha,
+          row['SUPC'],
+          row['Pack'],
+          row['Size'],
+          row['Unit'],
+          row['Brand'],
+          row['Desc'],
+          row['Cat'],
+          parseFloat(row['Case $']) || null,
+          row['Split $'] || null,
+          row['Net Wt'] || null,
+          row['Stock'] || null
+        ]
+      );
+      filasCrudas++;
+
+      // Normalizar datos y guardar en bd_precios_historicos
       const clave = row['SUPC'];
-      const descripcion = row['Desc'];
-      const categoria = row['Cat'];
-      const marca = row['Brand'];
-      const precio_case = parseFloat(row['Case $']) || null;
-
-      let nombre_com = null;
-      let unidad = null;
-      let cantidad = null;
-      let tamaño = null;
-      let precio_unit = null;
-
       const catalogo = await pool.query(
         `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
         [proveedor, clave]
       );
 
       if (catalogo.rowCount > 0) {
-        const producto = catalogo.rows[0];
-        nombre_com = producto.nombre_estandar;
-        unidad = producto.unidad;
-        cantidad = producto.qty;
-        tamaño = producto.size;
+        const prod = catalogo.rows[0];
+        const totalUnidades = (prod.qty || 1) * (prod.pack || 1);
+        const precioUnitario = parseFloat(row['Case $']) && totalUnidades > 0
+          ? parseFloat(row['Case $']) / totalUnidades
+          : null;
 
-        const totalUnidades = (cantidad || 1) * (producto.pack || 1);
-        precio_unit = precio_case && totalUnidades > 0 ? precio_case / totalUnidades : null;
+        await pool.query(
+          `INSERT INTO bd_precios_historicos
+           (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_comun, descripcion, categoria, marca, tamaño, unidad, size_unidad)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [
+            fecha,
+            proveedor,
+            clave,
+            parseFloat(row['Case $']) || null,
+            precioUnitario,
+            prod.qty,
+            prod.nombre_estandar,
+            row['Desc'],
+            row['Cat'],
+            row['Brand'],
+            prod.size,
+            prod.unidad,
+            `${prod.size} - ${prod.unidad}`
+          ]
+        );
+        filasNormalizadas++;
       }
-
-      await pool.query(
-        `INSERT INTO bd_precios_historicos 
-        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_com, descripcion, categoria, marca, tamaño, unidad, size_unidad)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [
-          fecha,
-          proveedor,
-          clave,
-          precio_case,
-          precio_unit,
-          cantidad,
-          nombre_com,
-          descripcion,
-          categoria,
-          marca,
-          tamaño,
-          unidad,
-          tamaño && unidad ? `${tamaño} ${unidad}` : null
-        ]
-      );
-
-      filasInsertadas++;
     }
 
     fs.unlinkSync(filePath);
 
     res.status(200).json({
-      message: '✅ Archivo Sysco procesado y normalizado correctamente',
+      message: '✅ Archivo Sysco procesado con éxito',
       fecha,
-      filas_insertadas: filasInsertadas
+      filas_crudas: filasCrudas,
+      filas_normalizadas: filasNormalizadas
     });
 
   } catch (error) {
     console.error('❌ Error al procesar archivo Sysco:', error);
-    res.status(500).json({ error: 'Error interno al procesar y normalizar archivo Sysco' });
+    res.status(500).json({ error: 'Error interno al procesar archivo Sysco' });
   }
 });
 

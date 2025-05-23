@@ -7,13 +7,12 @@ import { pool } from '../db/connection.js';
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
 
-// ✅ Extraer fecha desde el nombre, sin importar el prefijo
+// Extrae fecha del nombre: USFoods_04_05_2025.xlsx → 2025-04-05
 function extractFecha(filename) {
-  const regex = /(\d{2})_(\d{2})_(\d{4})/;
-  const match = filename.match(regex);
-  if (match) {
-    const [, mes, dia, anio] = match;
-    return `${anio}-${mes}-${dia}`;
+  const parts = filename.replace('.xlsx', '').split('_');
+  if (parts.length === 4) {
+    const [_, mes, dia, anio] = parts;
+    return `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   }
   return null;
 }
@@ -31,20 +30,36 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
   try {
     const workbook = xlsx.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 }); // Saltar encabezado visual
+    const data = xlsx.utils.sheet_to_json(sheet, { defval: '', range: 1 }); // Saltamos encabezado visual
 
-    let filasInsertadas = 0;
+    let filasCrudas = 0;
+    let filasNormalizadas = 0;
 
     for (const row of data) {
-      const clave = row['Product Number'];
-      let nombre_comun = null;
-      let unidad = null;
-      let cantidad = null;
-      let size = null;
-      let pack = null;
-      let precioUnitario = null;
+      // 1️⃣ Insertar datos crudos
+      await pool.query(
+        `INSERT INTO precios_raw_usfoods (
+          fecha, group_name, clave, nombre, product_brand, package_size, product_price,
+          uom, storage_description, quantity, unit_price
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          fecha,
+          row['Group Name'],
+          row['Product Number'],
+          row['Product Description'],
+          row['Product Brand'],
+          row['Product Package Size'],
+          parseFloat(row['Product Price']) || null,
+          row['Product UOM'],
+          row['Storage Description'],
+          parseInt(row['Qty']) || null,
+          parseFloat(row['Unit Price']) || null
+        ]
+      );
+      filasCrudas++;
 
-      // Buscar en catálogo
+      // 2️⃣ Normalizar y guardar en bd_precios_historicos
+      const clave = row['Product Number'];
       const catalogo = await pool.query(
         `SELECT * FROM catalogo_pp WHERE proveedor = $1 AND clave = $2 LIMIT 1`,
         [proveedor, clave]
@@ -52,52 +67,48 @@ router.post('/upload-usfoods', upload.single('file'), async (req, res) => {
 
       if (catalogo.rowCount > 0) {
         const producto = catalogo.rows[0];
-        nombre_comun = producto.nombre_estandar;
-        unidad = producto.unidad;
-        cantidad = producto.qty;
-        size = producto.size;
-        pack = producto.pack;
+        const totalUnidades = (producto.qty || 1) * (producto.pack || 1);
+        const precioUnitario = parseFloat(row['Product Price']) && totalUnidades > 0
+          ? parseFloat(row['Product Price']) / totalUnidades
+          : null;
 
-        const precioCaja = parseFloat(row['Product Price']) || null;
-        const totalUnidades = (cantidad || 1) * (pack || 1);
-        precioUnitario = precioCaja && totalUnidades > 0 ? precioCaja / totalUnidades : null;
+        await pool.query(
+          `INSERT INTO bd_precios_historicos (
+            fecha, proveedor, clave, precio_case, precio_unit, cantidad,
+            nombre_comun, descripcion, categoria, marca, tamaño, unidad, size_unidad
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [
+            fecha,
+            proveedor,
+            clave,
+            parseFloat(row['Product Price']) || null,
+            precioUnitario,
+            producto.qty,
+            producto.nombre_estandar,
+            row['Product Description'],
+            row['Group Name'],
+            row['Product Brand'],
+            producto.size,
+            producto.unidad,
+            `${producto.size} - ${producto.unidad}`
+          ]
+        );
+        filasNormalizadas++;
       }
-
-      await pool.query(
-        `INSERT INTO bd_precios_historicos
-        (fecha, proveedor, clave, precio_case, precio_unit, cantidad, nombre_común, descripcion, categoria, marca, tamaño, unidad, size_unidad)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [
-          fecha,
-          proveedor,
-          clave,
-          parseFloat(row['Product Price']) || null,
-          precioUnitario,
-          parseInt(row['Qty']) || null,
-          nombre_comun,
-          row['Product Description'],
-          row['Group Name'],
-          row['Product Brand'],
-          row['Product Package Size'],
-          row['Product UOM'],
-          `${row['Product Package Size']} - ${row['Product UOM']}`
-        ]
-      );
-
-      filasInsertadas++;
     }
 
     fs.unlinkSync(filePath);
 
     res.status(200).json({
-      message: '✅ Archivo USFoods procesado correctamente',
+      message: '✅ Archivo USFoods procesado con éxito',
       fecha,
-      filas_insertadas: filasInsertadas
+      filas_crudas: filasCrudas,
+      filas_normalizadas: filasNormalizadas
     });
 
   } catch (error) {
     console.error('❌ Error al procesar archivo USFoods:', error);
-    res.status(500).json({ error: 'Error interno al procesar archivo USFoods' });
+    res.status(500).json({ error: 'Error al procesar archivo USFoods' });
   }
 });
 
