@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import productosRoutes from './routes/productos.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
+import uploadSyscoRoutes from './routes/upload-sysco.routes.js';
+import uploadUSFoodsRoutes from './routes/upload-usfoods.routes.js';
+import uploadRDDepotRoutes from './routes/upload-restaurantdepot.routes.js';
 
 // Configuración
 dotenv.config();
@@ -14,13 +18,9 @@ app.use(express.json());
 
 // Rutas
 app.use('/api/productos', productosRoutes);
-import uploadRoutes from './routes/upload.routes.js';
 app.use('/api', uploadRoutes);
-import uploadSyscoRoutes from './routes/upload-sysco.routes.js';
 app.use('/api', uploadSyscoRoutes);
-import uploadUSFoodsRoutes from './routes/upload-usfoods.routes.js';
 app.use('/api', uploadUSFoodsRoutes);
-import uploadRDDepotRoutes from './routes/upload-restaurantdepot.routes.js';
 app.use('/api', uploadRDDepotRoutes);
 
 
